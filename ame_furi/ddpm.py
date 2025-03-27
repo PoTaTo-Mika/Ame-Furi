@@ -72,12 +72,9 @@ class DDPM:
         # Predict the noise
         pred_noise = self.model(x_t, t)
 
-        # Compute loss
+        # Compute loss (return the tensor, not .item())
         loss = self.loss_fn(pred_noise, true_noise)
-        loss.backward()
-        optimizer.step()
-
-        return loss.item()
+        return loss  # Return the tensor for backpropagation
 
     @torch.no_grad()
     def sample(self, num_samples=1, img_size=(3, 64, 64), progress=True):
