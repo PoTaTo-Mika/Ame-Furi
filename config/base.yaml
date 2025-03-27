@@ -1,0 +1,50 @@
+defaults:
+  - _self_
+  
+# Model configuration
+model:
+  in_channels: 1  # MNIST is grayscale
+  out_channels: 1  # Output same as input for diffusion
+  base_channels: 64
+  depth: 4
+  time_emb_dim: 128
+
+# Diffusion process configuration
+diffusion:
+  num_timesteps: 1000
+  beta_start: 1e-4
+  beta_end: 0.02
+
+# Training configuration
+training:
+  epochs: 100
+  batch_size: 16
+  seed: 114
+  grad_clip: 0
+  mixed_precision: false
+  resume: true
+
+# Optimizer configuration
+optimizer:
+  lr: 1e-4
+  beta1: 0.9
+  beta2: 0.999
+  weight_decay: 0.0
+  min_lr: 1e-6
+
+# Data configuration
+data:
+  image_size: 32  # MNIST will be resized to this
+
+# Logging configuration
+logging:
+  log_dir: "logs"
+  checkpoint_dir: "checkpoints"
+  tensorboard_dir: "logs/tensorboard"
+  sample_dir: "logs/samples"
+  log_interval: 100  # Log every N batches
+  sample_interval: 5  # Generate samples every N epochs
+  num_samples: 16  # Number of samples to generate
+
+# Distributed training
+distributed: true
