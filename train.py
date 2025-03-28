@@ -191,11 +191,11 @@ def main(cfg):
 
         # Save model checkpoint
         model_save_path = save_dir / 'model.pth'
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'epoch': cfg.training.epochs,
-            'config': cfg
-        }, model_save_path)
+        state_dict = model.state_dict()
+        new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        
+        # Save only the state_dict
+        torch.save(new_state_dict, model_save_path)
         logging.info(f'Model saved to {model_save_path}')
 
         # Save config by copying the original config file
