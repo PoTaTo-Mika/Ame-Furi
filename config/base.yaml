@@ -47,3 +47,8 @@ logging:
 
 # Distributed training
 distributed: true
+
+# Inference (default)
+inference:
+  output_dir: '/mnt/users/potato/Ame-Furi/outputs'
+  num_samples: 1

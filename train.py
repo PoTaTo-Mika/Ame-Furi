@@ -198,11 +198,12 @@ def main(cfg):
         }, model_save_path)
         logging.info(f'Model saved to {model_save_path}')
 
-        # Save config
+        # Save config by copying the original config file
+        import shutil
+        original_config_path = Path(hydra.utils.get_original_cwd()) / "config" / "base.yaml"
         config_save_path = save_dir / 'config.yaml'
-        with open(config_save_path, 'w') as f:
-            yaml.dump(cfg, f)
-        logging.info(f'Config saved to {config_save_path}')
+        shutil.copy(original_config_path, config_save_path)
+        logging.info(f'Config copied to {config_save_path}')
 
         writer.close()
         logging.info("Training completed!")

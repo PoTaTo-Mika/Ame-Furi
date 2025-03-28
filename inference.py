@@ -8,8 +8,8 @@ from ame_furi.ddpm import DDPM, LinearNoiseScheduler
 import hydra
 from omegaconf import OmegaConf
 
-def load_model(config_path, checkpoint_path, device="cuda"):
-    """Load trained model from checkpoint"""
+def load_model(config_path, device="cuda"):
+    """Load trained model from checkpoint using config"""
     # Load config
     cfg = OmegaConf.load(config_path)
     
@@ -22,8 +22,8 @@ def load_model(config_path, checkpoint_path, device="cuda"):
         time_emb_dim=cfg.model.time_emb_dim
     ).to(device)
     
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    # Load checkpoint (path now comes from config)
+    checkpoint = torch.load(Path(cfg.logging.save_dir) / cfg.logging.save_name / 'model.pth', map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     
     # Initialize DDPM
@@ -36,8 +36,11 @@ def load_model(config_path, checkpoint_path, device="cuda"):
     ddpm = DDPM(model, noise_scheduler, device=device)
     return ddpm, cfg
 
-def generate_images(ddpm, cfg, num_samples=1, output_dir="outputs"):
-    """Generate sample images"""
+def generate_images(ddpm, cfg):
+    """Generate sample images using parameters from config"""
+    output_dir = cfg.inference.output_dir
+    num_samples = cfg.inference.num_samples
+    
     Path(output_dir).mkdir(exist_ok=True, parents=True)
     
     with torch.no_grad():
@@ -56,22 +59,18 @@ def generate_images(ddpm, cfg, num_samples=1, output_dir="outputs"):
 def main():
     parser = argparse.ArgumentParser(description="Generate flower images using trained DDPM")
     parser.add_argument("--config", type=str, required=True, help="Path to config file")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint")
-    parser.add_argument("--num_samples", type=int, default=1, help="Number of images to generate")
-    parser.add_argument("--output_dir", type=str, default="outputs", help="Directory to save generated images")
-    parser.add_argument("--flower_id", type=str, help="Flower ID/name to condition generation (if applicable)")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     # Load model
-    ddpm, cfg = load_model(args.config, args.checkpoint, device)
+    ddpm, cfg = load_model(args.config, device)
     
     # Generate images
-    print(f"Generating {args.num_samples} flower images...")
-    samples = generate_images(ddpm, cfg, args.num_samples, args.output_dir)
+    print(f"Generating {cfg.inference.num_samples} flower images...")
+    samples = generate_images(ddpm, cfg)
     
-    print(f"Images saved to {args.output_dir}")
+    print(f"Images saved to {cfg.inference.output_dir}")
 
 if __name__ == "__main__":
     main()
