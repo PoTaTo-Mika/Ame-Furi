@@ -7,11 +7,11 @@ model:
   out_channels: 3  # Output same as input for diffusion
   base_channels: 64
   depth: 4
-  time_emb_dim: 128
+  time_emb_dim: 64
 
 # Diffusion process configuration
 diffusion:
-  num_timesteps: 1000
+  num_timesteps: 50
   beta_start: 1e-4
   beta_end: 0.02
 
@@ -38,6 +38,7 @@ data:
 logging:
   log_dir: "logs"
   save_dir: "/mnt/users/potato/Ame-Furi/checkpoints"
+  save_name: "flower_test1"
   tensorboard_dir: "logs/tensorboard"
   sample_dir: "logs/samples"
   log_interval: 100

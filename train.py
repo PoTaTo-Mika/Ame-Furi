@@ -5,6 +5,7 @@ import torchvision
 from torchvision import datasets, transforms
 import os
 import hydra
+import yaml
 import omegaconf as OmegaConf
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -184,13 +185,24 @@ def main(cfg):
             writer.add_scalar("epoch/train_loss", epoch_loss, epoch)
     
     if rank == 0:
+        # Create save directory with cfg.logging.save_name
+        save_dir = Path(cfg.logging.save_dir) / cfg.logging.save_name
+        save_dir.mkdir(parents=True, exist_ok=True)
 
-        model_save_path = Path(cfg.logging.save_dir) / 'flower.pth'
-        torch.save({'model_state_dict': model.state_dict(),
-                    'epoch': cfg.training.epochs,
-                    'config': cfg
+        # Save model checkpoint
+        model_save_path = save_dir / 'model.pth'
+        torch.save({
+            'model_state_dict': model.state_dict(),
+            'epoch': cfg.training.epochs,
+            'config': cfg
         }, model_save_path)
         logging.info(f'Model saved to {model_save_path}')
+
+        # Save config
+        config_save_path = save_dir / 'config.yaml'
+        with open(config_save_path, 'w') as f:
+            yaml.dump(cfg, f)
+        logging.info(f'Config saved to {config_save_path}')
 
         writer.close()
         logging.info("Training completed!")
