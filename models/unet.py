@@ -17,18 +17,33 @@ class SinusoidalPositionEmbeddings(nn.Module):
         embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         return embeddings
 
-class DoubleConv(nn.Module):
+class ClassEmbedding(nn.Module):
+    def __init__(self, num_classes, embedding_dim):
+        super().__init__()
+        self.embedding = nn.Embedding(num_classes, embedding_dim)
+        
+    def forward(self, class_labels):
+        return self.embedding(class_labels)
 
-    def __init__(self, in_channels, out_channels, mid_channels=None, time_emb_dim=None):
+class DoubleConv(nn.Module):
+    def __init__(self, in_channels, out_channels, mid_channels=None, time_emb_dim=None, class_emb_dim=None):
         super().__init__()
         if not mid_channels:
             mid_channels = out_channels
 
         self.time_mlp = None
+        self.class_mlp = None
+        
         if time_emb_dim is not None:
             self.time_mlp = nn.Sequential(
                 nn.SiLU(),
                 nn.Linear(time_emb_dim, out_channels)
+            )
+            
+        if class_emb_dim is not None:
+            self.class_mlp = nn.Sequential(
+                nn.SiLU(),
+                nn.Linear(class_emb_dim, out_channels)
             )
 
         self.double_conv = nn.Sequential(
@@ -40,11 +55,14 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-    def forward(self, x, time_emb=None):
+    def forward(self, x, time_emb=None, class_emb=None):
         out = self.double_conv(x)
         if self.time_mlp is not None and time_emb is not None:
             time_emb = self.time_mlp(time_emb)
-            out = out + time_emb[:, :, None, None]  # Broadcast time embedding
+            out = out + time_emb[:, :, None, None]
+        if self.class_mlp is not None and class_emb is not None:
+            class_emb = self.class_mlp(class_emb)
+            out = out + class_emb[:, :, None, None]
         return out
 
 class AttentionBlock(nn.Module):
@@ -115,7 +133,7 @@ class OutConv(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels=3, n_classes=3, base_channels=64, depth=5, time_emb_dim=128):
+    def __init__(self, n_channels=3, n_classes=3, num_classes=5, base_channels=64, depth=5, time_emb_dim=128, class_emb_dim=64):
         super().__init__()
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(time_emb_dim),
@@ -123,8 +141,18 @@ class UNet(nn.Module):
             nn.SiLU(),
             nn.Linear(time_emb_dim, time_emb_dim)
         )
+        
+        self.class_embedding = ClassEmbedding(num_classes, class_emb_dim)
+        self.class_mlp = nn.Sequential(
+            nn.Linear(class_emb_dim, class_emb_dim),
+            nn.SiLU(),
+            nn.Linear(class_emb_dim, class_emb_dim)
+        )
 
-        self.inc = DoubleConv(n_channels, base_channels, time_emb_dim=time_emb_dim)
+        self.inc = DoubleConv(n_channels, base_channels, 
+                            time_emb_dim=time_emb_dim, 
+                            class_emb_dim=class_emb_dim)
+        
         self.down_layers = nn.ModuleList()
         for i in range(depth - 1):
             in_ch = base_channels * (2 ** i)
@@ -139,11 +167,14 @@ class UNet(nn.Module):
 
         self.outc = OutConv(base_channels, n_classes)
 
-    def forward(self, x, time):
+    def forward(self, x, time, class_labels):
         time_emb = self.time_mlp(time)
+        class_emb = self.class_mlp(self.class_embedding(class_labels))
+        
         x_skips = []
-        x = self.inc(x, time_emb)
+        x = self.inc(x, time_emb, class_emb)
         x_skips.append(x)
+        
         for down in self.down_layers:
             x = down(x)
             x_skips.append(x)

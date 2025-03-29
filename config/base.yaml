@@ -5,13 +5,13 @@ defaults:
 model:
   in_channels: 3
   out_channels: 3  # Output same as input for diffusion
-  base_channels: 64
-  depth: 4
+  base_channels: 256
+  depth: 5
   time_emb_dim: 64
 
 # Diffusion process configuration
 diffusion:
-  num_timesteps: 50
+  num_timesteps: 200
   beta_start: 1e-4
   beta_end: 0.02
 
@@ -31,8 +31,9 @@ optimizer:
 # Data configuration
 data:
   root_dir: "/mnt/users/potato/Ame-Furi/data/5flower"
-  image_size: 128
+  image_size: 256
   num_workers: 8
+  num_classes: 5
 
 # Logging configuration
 logging:
@@ -52,3 +53,4 @@ distributed: true
 inference:
   output_dir: '/mnt/users/potato/Ame-Furi/outputs'
   num_samples: 1
+  class_label: 1

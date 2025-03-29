@@ -138,17 +138,17 @@ def main(cfg):
         model.train()
         total_loss = 0.0
         
-        for batch_idx, (images, _) in enumerate(train_loader):
+        for batch_idx, (images, labels) in enumerate(train_loader):  # Now using both images and labels
             images = images.to(rank)
+            labels = labels.to(rank)  # Move labels to device
             
-            loss = ddpm.train_step(images, optimizer)  # Now returns a tensor
+            loss = ddpm.train_step(images, labels, optimizer)  # Pass labels to train_step
             
-            # Backpropagate and update weights
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
             
-            total_loss += loss.item()  # Now safe to call .item()
+            total_loss += loss.item()
             
             if rank == 0 and batch_idx % cfg.logging.log_interval == 0:
                 avg_loss = total_loss / (batch_idx + 1)
@@ -162,25 +162,33 @@ def main(cfg):
         
         # Validation and sampling
         if rank == 0:
-            # Sample some images periodically
             if epoch % cfg.logging.sample_interval == 0 or epoch == cfg.training.epochs - 1:
                 model.eval()
                 
                 with torch.no_grad():
-                    samples = ddpm.sample(
-                        num_samples=cfg.logging.num_samples,
-                        img_size=(cfg.model.in_channels, cfg.data.image_size, cfg.data.image_size)
-                    )
+                    # Sample images for each class
+                    num_classes = len(train_loader.dataset.classes)
+                    samples_per_class = max(1, cfg.logging.num_samples // num_classes)
+                    
+                    all_samples = []
+                    for class_idx in range(num_classes):
+                        # Generate samples for this class
+                        samples = ddpm.sample(
+                            num_samples=samples_per_class,
+                            img_size=(cfg.model.in_channels, cfg.data.image_size, cfg.data.image_size),
+                            class_labels=class_idx
+                        )
+                        all_samples.append(samples)
+                    
+                    # Combine all samples
+                    samples = torch.cat(all_samples, dim=0)[:cfg.logging.num_samples]
                 
-                # Save samples
                 save_path = Path(cfg.logging.sample_dir) / f"samples_epoch_{epoch:03d}.png"
                 torchvision.utils.save_image(samples, save_path, nrow=int(np.sqrt(cfg.logging.num_samples)))
                 
-                # Log images to tensorboard
                 grid = torchvision.utils.make_grid(samples, nrow=int(np.sqrt(cfg.logging.num_samples)))
                 writer.add_image("generated_samples", grid, epoch)
             
-            # Log epoch metrics
             epoch_loss = total_loss / len(train_loader)
             writer.add_scalar("epoch/train_loss", epoch_loss, epoch)
     

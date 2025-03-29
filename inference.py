@@ -8,6 +8,7 @@ from models.unet import UNet
 from ame_furi.ddpm import DDPM, LinearNoiseScheduler
 import hydra
 from omegaconf import OmegaConf
+from tqdm import tqdm
 
 def setup_logging():
     """Setup basic logging configuration"""
@@ -23,13 +24,15 @@ def load_model(config_path, device="cuda"):
         # Load config
         cfg = OmegaConf.load(config_path)
         
-        # Initialize model
+        # Initialize model with correct num_classes
         model = UNet(
             n_channels=cfg.model.in_channels,
             n_classes=cfg.model.out_channels,
+            num_classes=cfg.data.num_classes,  # Added from config
             base_channels=cfg.model.base_channels,
             depth=cfg.model.depth,
-            time_emb_dim=cfg.model.time_emb_dim
+            time_emb_dim=cfg.model.time_emb_dim,
+            class_emb_dim=cfg.model.get('class_emb_dim', 64)  # Default if not in config
         ).to(device)
         
         # Construct checkpoint path
@@ -45,7 +48,8 @@ def load_model(config_path, device="cuda"):
         noise_scheduler = LinearNoiseScheduler(
             num_timesteps=cfg.diffusion.num_timesteps,
             beta_start=cfg.diffusion.beta_start,
-            beta_end=cfg.diffusion.beta_end
+            beta_end=cfg.diffusion.beta_end,
+            device=device
         )
         
         ddpm = DDPM(model, noise_scheduler, device=device)
@@ -63,18 +67,35 @@ def generate_images(ddpm, cfg, device="cuda"):
         
         output_dir.mkdir(exist_ok=True, parents=True)
         
+        # Handle class labels from config
+        class_labels = cfg.inference.get('class_label')
+        if class_labels is not None:
+            if isinstance(class_labels, int):
+                class_labels = [class_labels]
+            class_labels = torch.tensor(class_labels, device=device).long()
+        
         logging.info(f"Generating {num_samples} samples...")
         with torch.no_grad():
             samples = ddpm.sample(
                 num_samples=num_samples,
-                img_size=(cfg.model.in_channels, cfg.data.image_size, cfg.data.image_size)
+                img_size=(cfg.model.in_channels, cfg.data.image_size, cfg.data.image_size),
+                class_labels=class_labels
             )
         
-        # Save samples
+        # Save samples as grid and individual images
+        grid_path = output_dir / "generated_grid.png"
+        torchvision.utils.save_image(
+            samples, 
+            grid_path,
+            nrow=int(np.sqrt(num_samples)),
+            normalize=True
+        )
+        logging.info(f"Saved sample grid to {grid_path}")
+        
+        # Save individual images
         for i in range(num_samples):
-            save_path = output_dir / f"generated_flower_{i}.png"
-            torchvision.utils.save_image(samples[i], save_path)
-            logging.info(f"Saved image to {save_path}")
+            save_path = output_dir / f"sample_{i:04d}.png"
+            torchvision.utils.save_image(samples[i], save_path, normalize=True)
         
         return samples
         
